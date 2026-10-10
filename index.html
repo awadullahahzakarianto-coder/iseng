@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Little Playground | The Lost Signal</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        /* =========================================
+           CSS VARIABLES & THEME SYSTEM
+        ========================================= */
+        :root {
+            --bg-color: #070b19; /* Dark Navy */
+            --text-color: #e2e8f0;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-hover: rgba(255, 255, 255, 0.08);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --accent: #ffb7c5; /* Pastel Pink */
+            --accent-glow: rgba(255, 183, 197, 0.4);
+            --terminal-bg: #050505;
+            --terminal-text: #0f0;
+            --font-main: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --transition-smooth: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        [data-theme="light"] {
+            --bg-color: #f8f9fa; /* Light mode */
+            --text-color: #1a202c;
+            --card-bg: rgba(0, 0, 0, 0.03);
+            --card-hover: rgba(0, 0, 0, 0.08);
+            --card-border: rgba(0, 0, 0, 0.1);
+            --accent: #d6336c; /* Darker pink for contrast */
+            --accent-glow: rgba(214, 51, 108, 0.3);
+            --terminal-bg: #1a1a1a;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-main);
+            overflow-x: hidden;
+            transition: background-color 0.5s ease, color 0.5s ease;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Particles / Confetti Canvas */
+        #particleCanvas {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            pointer-events: none; z-index: 9999;
+        }
+
+        /* =========================================
+           SCENE MANAGEMENT
+        ========================================= */
+        .scene {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.8s ease;
+            z-index: 1;
+        }
+        .scene.active { opacity: 1; pointer-events: all; z-index: 10; }
+        .hidden { display: none !important; }
+
+        /* =========================================
+           01 - OPENING SCENE
+        ========================================= */
+        #scene-opening { background-color: var(--bg-color); z-index: 50; }
+        .opening-text { font-size: 2rem; font-weight: 300; margin-bottom: 30px; letter-spacing: 2px; text-align: center; }
+        .btn-enter {
+            background: transparent; color: var(--accent); border: 1px solid var(--accent);
+            padding: 12px 30px; font-family: var(--font-mono); font-size: 1rem;
+            cursor: pointer; border-radius: 4px; transition: var(--transition-smooth);
+            text-transform: uppercase; letter-spacing: 2px;
+        }
+        .btn-enter:hover { background: var(--accent); color: var(--bg-color); box-shadow: 0 0 15px var(--accent-glow); }
+
+        /* =========================================
+           02 - PLAYGROUND (MAIN ROOM)
+        ========================================= */
+        .top-bar {
+            position: absolute; top: 0; left: 0; width: 100%; padding: 20px 40px;
+            display: flex; justify-content: space-between; align-items: center;
+            font-family: var(--font-mono); font-size: 0.9rem; z-index: 20;
+        }
+        .btn-icon { background: none; border: none; font-size: 1.8rem; cursor: pointer; transition: transform 0.3s; }
+        .btn-icon:hover { transform: scale(1.1) rotate(15deg); }
+
+        /* Hidden Clues */
+        .hidden-clue {
+            position: absolute; font-family: var(--font-mono); font-size: 1.2rem;
+            opacity: 0.05; cursor: default; transition: opacity 0.3s;
+        }
+        .hidden-clue:hover { opacity: 1; color: var(--accent); text-shadow: 0 0 10px var(--accent-glow); }
+        .dark-clue { top: 20%; left: 10%; display: block; }
+        .light-clue { bottom: 20%; right: 10%; display: none; }
+        [data-theme="light"] .dark-clue { display: none; }
+        [data-theme="light"] .light-clue { display: block; }
+
+        .interactive-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;
+            width: 90%; max-width: 600px;
+        }
+        
+        .object-card {
+            background: var(--card-bg); border: 1px solid var(--card-border);
+            border-radius: 16px; padding: 40px 20px; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            backdrop-filter: blur(10px); transition: var(--transition-smooth);
+            color: var(--text-color); position: relative;
+        }
+        .object-card:hover {
+            background: var(--card-hover); transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3); border-color: var(--accent);
+        }
+        .object-card .icon { font-size: 3rem; margin-bottom: 15px; transition: transform 0.3s; }
+        .object-card:hover .icon { transform: scale(1.15); }
+        .object-card .label { font-size: 0.9rem; font-weight: 600; font-family: var(--font-mono); letter-spacing: 1px;}
+        
+        .status-dot {
+            position: absolute; top: 15px; right: 15px; width: 10px; height: 10px;
+            border-radius: 50%; background: #444; transition: var(--transition-smooth);
+        }
+        .status-dot.done { background: var(--terminal-text); box-shadow: 0 0 10px var(--terminal-text); }
+
+        .door-card.locked { filter: grayscale(100%); opacity: 0.5; pointer-events: none; }
+        .door-card.unlocked { opacity: 1; filter: none; border: 1px solid var(--accent); box-shadow: 0 0 20px var(--accent-glow); animation: pulseDoor 2s infinite; }
+        @keyframes pulseDoor { 0% { box-shadow: 0 0 10px var(--accent-glow); } 50% { box-shadow: 0 0 25px var(--accent-glow); } 100% { box-shadow: 0 0 10px var(--accent-glow); } }
+
+        /* =========================================
+           MODALS
+        ========================================= */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px);
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: var(--transition-smooth); z-index: 100;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: all; }
+        
+        .modal-content {
+            background: var(--bg-color); border-radius: 12px; padding: 40px;
+            width: 90%; max-width: 550px; position: relative;
+            transform: translateY(30px) scale(0.95); transition: var(--transition-smooth);
+            border: 1px solid var(--accent); text-align: left;
+        }
+        .modal-overlay.active .modal-content { transform: translateY(0) scale(1); }
+        
+        .btn-close {
+            position: absolute; top: 15px; right: 20px; background: none; border: none;
+            color: var(--text-color); font-size: 1.5rem; cursor: pointer; opacity: 0.6; transition: 0.3s;
+        }
+        .btn-close:hover { opacity: 1; color: var(--accent); transform: rotate(90deg); }
+
+        h2.modal-title { margin-bottom: 15px; font-weight: 300; letter-spacing: 1px; color: var(--accent); }
+        p.modal-desc { font-size: 0.95rem; line-height: 1.6; opacity: 0.8; margin-bottom: 20px; }
+
+        /* General Inputs & Buttons inside modal */
+        .input-group { display: flex; gap: 10px; margin-top: 15px; }
+        .input-box {
+            flex: 1; background: transparent; border: none; border-bottom: 2px solid rgba(255,255,255,0.2);
+            color: var(--text-color); font-family: var(--font-main); font-size: 1rem; padding: 8px 5px; outline: none; transition: border-color 0.3s;
+        }
+        .input-box:focus { border-bottom-color: var(--accent); }
+        
+        .btn-action {
+            background: var(--accent); color: #000; border: none; padding: 10px 20px;
+            font-weight: 600; border-radius: 4px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-action:hover { box-shadow: 0 0 15px var(--accent-glow); transform: translateY(-2px); }
+
+        .feedback { margin-top: 15px; font-size: 0.85rem; min-height: 20px; font-family: var(--font-mono); }
+        .success-text { color: #4ade80; }
+        .error-text { color: #f87171; }
+
+        /* Computer Terminal Override */
+        .terminal-style { background: var(--terminal-bg); border-color: #333; color: var(--terminal-text); font-family: var(--font-mono); }
+        .terminal-style h2.modal-title { color: #fff; text-shadow: 0 0 5px #fff; }
+        .terminal-style .modal-desc { color: var(--terminal-text); opacity: 1; }
+        .terminal-style .input-box { border-bottom-color: var(--terminal-text); color: var(--terminal-text); }
+        .terminal-style .btn-action { background: var(--terminal-text); color: #000; }
+        .terminal-style .btn-action:hover { box-shadow: 0 0 15px rgba(0, 255, 0, 0.5); }
+
+        /* Radio Styling */
+        .hint-btn { background: none; border: 1px dashed var(--accent); color: var(--accent); padding: 5px 10px; font-size: 0.8rem; cursor: pointer; border-radius: 4px; margin-bottom: 10px;}
+        .hint-text-display { font-size: 0.85rem; color: #aaa; margin-bottom: 15px; min-height: 20px; font-style: italic;}
+
+        /* Mystery Box */
+        .box-arena { position: relative; height: 200px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 20px; overflow: hidden;}
+        .main-box-icon { font-size: 5rem; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); transition: transform 0.5s;}
+        .main-box-icon.open { transform: translate(-50%, -50%) scale(1.2); }
+        .hidden-petal { position: absolute; font-size: 1.5rem; cursor: pointer; opacity: 0; user-select: none; transition: opacity 0.3s, transform 0.3s; z-index: 2;}
+        .box-arena:hover .hidden-petal { opacity: 0.3; } /* Hint on hover arena */
+        .hidden-petal:hover { opacity: 1; transform: scale(1.4) rotate(15deg); }
+        .hidden-petal.found { opacity: 0 !important; pointer-events: none; }
+
+        /* =========================================
+           05 - ENDING SCENE
+        ========================================= */
+        #scene-ending { background: var(--bg-color); text-align: center; }
+        
+        .cartoon-walk-container { position: absolute; top: 40%; left: -100px; display: flex; flex-direction: column; align-items: center; gap: 15px; animation: walkRight 4s linear forwards; }
+        .cartoon-char { font-size: 5rem; }
+        .speech-bubble {
+            background: #fff; color: #000; padding: 10px 20px; border-radius: 20px;
+            font-weight: 600; position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            white-space: nowrap;
+        }
+        .speech-bubble::after {
+            content: ''; position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%);
+            border-width: 10px 10px 0; border-style: solid; border-color: #fff transparent transparent transparent;
+        }
+
+        @keyframes walkRight {
+            0% { left: -10%; transform: translateY(0) rotate(0deg); }
+            25% { transform: translateY(-10px) rotate(10deg); }
+            50% { left: 50%; transform: translateY(0) rotate(0deg); }
+            75% { transform: translateY(-10px) rotate(-10deg); }
+            100% { left: 110%; transform: translateY(0) rotate(0deg); }
+        }
+
+        .final-credits { opacity: 0; transform: translateY(20px); transition: all 1s ease; margin-top: 50px; }
+        .final-credits.show { opacity: 1; transform: translateY(0); }
+        .final-title { font-size: 3rem; color: var(--accent); text-shadow: 0 0 20px var(--accent-glow); margin-bottom: 10px;}
+        .final-subtitle { font-size: 1.2rem; margin-bottom: 30px; opacity: 0.8;}
+        
+        .score-board-final { background: var(--card-bg); padding: 20px; border-radius: 8px; display: inline-block; margin-bottom: 30px; font-family: var(--font-mono); border: 1px solid var(--accent);}
+        
+        /* Responsive */
+        @media (max-width: 600px) {
+            .interactive-grid { grid-template-columns: 1fr; }
+            .hero-text h1 { font-size: 2rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Particle Canvas for Bloom Surprise & Ending -->
+    <canvas id="particleCanvas"></canvas>
+
+    <!-- ==========================================
+         SCENE 01: OPENING
+    =========================================== -->
+    <div id="scene-opening" class="scene active">
+        <h1 class="opening-text">Selamat Datang</h1>
+        <button class="btn-enter" onclick="startGame()">ENTER</button>
+    </div>
+
+    <!-- ==========================================
+         SCENE 02: THE LITTLE PLAYGROUND
+    =========================================== -->
+    <div id="scene-playground" class="scene">
+        
+        <header class="top-bar">
+            <div>
+                <span>SCORE: <strong id="uiScore">0</strong></span> | 
+                <span id="uiRank" style="color: var(--accent)">Curious Explorer</span>
+            </div>
+            <button id="themeToggle" class="btn-icon" aria-label="Toggle Theme" title="Switch Light/Dark Mode">💡</button>
+        </header>
+
+        <!-- Easter Eggs / Light & Shadow clues -->
+        <div class="hidden-clue dark-clue">Clue: ★ = S</div>
+        <div class="hidden-clue light-clue">Clue: ○ = G</div>
+        <div class="hidden-clue" style="top: 10%; right: 5%; font-size:0.8rem; cursor:pointer;" onclick="foundEasterEgg()">?</div>
+
+        <div style="text-align: center; margin-bottom: 40px; margin-top: 60px;">
+            <h1 style="font-weight: 300; letter-spacing: 2px;">THE LITTLE PLAYGROUND</h1>
+            <p style="opacity: 0.6; font-size: 0.9rem; margin-top: 10px;">Explore the objects.</p>
+        </div>
+
+        <div class="interactive-grid">
+            <button class="object-card" onclick="openModal('modal-comp')">
+                <div class="status-dot" id="dot-comp"></div>
+                <span class="icon">💻</span>
+                <span class="label">Komputer</span>
+            </button>
+            <button class="object-card" onclick="openModal('modal-radio')">
+                <div class="status-dot" id="dot-radio"></div>
+                <span class="icon">🎧</span>
+                <span class="label">Radio</span>
+            </button>
+            <button class="object-card" onclick="openModal('modal-box')">
+                <div class="status-dot" id="dot-box"></div>
+                <span class="icon">📦</span>
+                <span class="label">Mystery Box</span>
+            </button>
+            <button class="object-card door-card locked" id="doorFinal" onclick="openModal('modal-final')">
+                <span class="icon">🚪</span>
+                <span class="label">The Signal</span>
+            </button>
+        </div>
+        
+        <button style="margin-top: 50px; background:none; border:none; color: #666; cursor:pointer; text-decoration:underline; font-size:0.8rem;" onclick="resetGame()">Reset Game Progress</button>
+    </div>
+
+    <!-- ==========================================
+         MODALS (INTERACTIVE OBJECTS)
+    =========================================== -->
+
+    <!-- Modal 1: Komputer -->
+    <div class="modal-overlay" id="modal-comp">
+        <div class="modal-content terminal-style">
+            <button class="btn-close" onclick="closeModal('modal-comp')">✖</button>
+            <h2 class="modal-title">THE HACKER'S PASSWORD</h2>
+            <div class="modal-desc" id="comp-text">
+                > Booting system...<br>
+                > Untuk membuka sistem, pecahkan empat petunjuk berikut:<br><br>
+                A = Hitung jumlah sudut segitiga.<br>
+                B = Hitung jumlah sisi persegi.<br>
+                C = Hitung jumlah jari pada satu tangan.<br>
+                D = Nomor punggung Cristiano Ronaldo.<br><br>
+                > Masukkan kode A-B-C-D (tanpa spasi/strip):
+            </div>
+            <div class="input-group">
+                <span style="display:flex; align-items:center;">$</span>
+                <input type="text" id="inpComp" class="input-box" placeholder="4 Digit Code" maxlength="4" autocomplete="off">
+                <button class="btn-action" onclick="checkComputer()">SUBMIT</button>
+            </div>
+            <p class="feedback" id="fbComp"></p>
+        </div>
+    </div>
+
+    <!-- Modal 2: Radio -->
+    <div class="modal-overlay" id="modal-radio">
+        <div class="modal-content">
+            <button class="btn-close" onclick="closeModal('modal-radio')">✖</button>
+            <h2 class="modal-title">SECRET SONG DETECTIVE</h2>
+            <p class="modal-desc">An unknown signal has been detected. Listen carefully and discover the identity of the song.</p>
+            
+            <!-- Video/Audio Player -->
+            <video id="radioPlayer" src="The Weeknd - Call Out My Name (Official Video).mp4" controls style="width: 100%; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--card-border);"></video>
+            
+            <button class="hint-btn" onclick="getRadioHint()">Buka Clue (-10 Pts)</button>
+            <div class="hint-text-display" id="radioHintOut"></div>
+
+            <div class="input-group">
+                <input type="text" id="inpRadio" class="input-box" placeholder="Judul lagu..." autocomplete="off">
+                <button class="btn-action" onclick="checkRadio()">GUESS</button>
+            </div>
+            <p class="feedback" id="fbRadio"></p>
+        </div>
+    </div>
+
+    <!-- Modal 3: Mystery Box -->
+    <div class="modal-overlay" id="modal-box">
+        <div class="modal-content">
+            <button class="btn-close" onclick="closeModal('modal-box')">✖</button>
+            <h2 class="modal-title">BLOOM SURPRISE</h2>
+            <p class="modal-desc">Kotak ini terkunci rapat. Temukan dan kumpulkan 3 kelopak bunga (🌸) yang tersembunyi di area kotak ini untuk membukanya.</p>
+            
+            <div class="box-arena" id="boxArena">
+                <div class="main-box-icon" id="boxIcon">📦</div>
+                <!-- Petals (absolute positioned randomly) -->
+                <div class="hidden-petal" style="top: 15%; left: 20%;" onclick="collectPetal(this)">🌸</div>
+                <div class="hidden-petal" style="bottom: 15%; right: 25%;" onclick="collectPetal(this)">🌸</div>
+                <div class="hidden-petal" style="top: 40%; left: 75%;" onclick="collectPetal(this)">🌸</div>
+            </div>
+            
+            <p class="feedback" id="fbBox" style="color:var(--accent);">Kelopak terkumpul: <span id="petalCount">0</span>/3</p>
+        </div>
+    </div>
+
+    <!-- Modal 4: Final Challenge -->
+    <div class="modal-overlay" id="modal-final">
+        <div class="modal-content" style="border-color: #ffd700;">
+            <button class="btn-close" onclick="closeModal('modal-final')">✖</button>
+            <h2 class="modal-title" style="color: #ffd700;">THE LOST SIGNAL</h2>
+            <p class="modal-desc">Semua petunjuk telah terhubung.<br>Masukkan kata sandi akhir yang terdiri dari 4 huruf (Gabungan Clue Lampu, Komputer, dan Mystery Box).</p>
+            
+            <div class="input-group">
+                <input type="text" id="inpFinal" class="input-box" placeholder="4 Huruf Kunci" maxlength="4" autocomplete="off" style="text-transform: uppercase;">
+                <button class="btn-action" style="background:#ffd700;" onclick="checkFinal()">UNLOCK ENDING</button>
+            </div>
+            <p class="feedback" id="fbFinal"></p>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         SCENE 03: ENDING
+    =========================================== -->
+    <div id="scene-ending" class="scene">
+        
+        <!-- Walking Cartoon -->
+        <div class="cartoon-walk-container" id="animCartoon">
+            <div class="speech-bubble">keren dan hebat</div>
+            <div class="cartoon-char">🚶‍♂️</div>
+        </div>
+
+        <!-- Final Text -->
+        <div class="final-credits" id="finalText">
+            <h1 class="final-title">done</h1>
+            <p class="final-subtitle">terimakasih sudah meluangkan waktu. 😭</p>
+            
+            <div class="score-board-final">
+                <div>Total Score: <span id="finalScoreDisplay" style="color:var(--accent); font-weight:bold;">0</span></div>
+                <div>Rank: <span id="finalRankDisplay" style="color:#4ade80;">The Chosen One</span></div>
+            </div>
+            <br>
+            <button class="btn-enter" onclick="resetGame()">PLAY AGAIN</button>
+        </div>
+
+    </div>
+
+    <!-- ==========================================
+         JAVASCRIPT LOGIC
+    =========================================== -->
+    <script>
+        // --- 1. STATE MANAGEMENT ---
+        let gameState = {
+            score: 0,
+            theme: 'dark',
+            compDone: false,
+            radioDone: false,
+            boxDone: false,
+            finalDone: false,
+            easterEgg: false,
+            radioHints: 0
+        };
+
+        const STORAGE_KEY = 'theLostSignal_save';
+
+        function saveState() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(gameState));
+            updateUI();
+        }
+
+        function loadState() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if(saved) {
+                gameState = JSON.parse(saved);
+            }
+            applyTheme(gameState.theme);
+            updateUI();
+            checkFinalUnlock();
+        }
+
+        function updateScore(points) {
+            gameState.score += points;
+            saveState();
+        }
+
+        function updateUI() {
+            document.getElementById('uiScore').innerText = gameState.score;
+            
+            // Calculate Rank
+            let rank = "Curious Explorer";
+            if (gameState.score >= 100) rank = "Junior Detective";
+            if (gameState.score >= 250) rank = "Master Detective";
+            if (gameState.finalDone) rank = "The Chosen One";
+            document.getElementById('uiRank').innerText = rank;
+
+            // Status Dots
+            if(gameState.compDone) document.getElementById('dot-comp').classList.add('done');
+            if(gameState.radioDone) document.getElementById('dot-radio').classList.add('done');
+            if(gameState.boxDone) document.getElementById('dot-box').classList.add('done');
+        }
+
+        function resetGame() {
+            if(confirm("Yakin ingin menghapus progress permainan?")) {
+                localStorage.removeItem(STORAGE_KEY);
+                location.reload();
+            }
+        }
+
+        // --- 2. SCENE TRANSITIONS ---
+        function startGame() {
+            document.getElementById('scene-opening').classList.remove('active');
+            setTimeout(() => {
+                document.getElementById('scene-opening').classList.add('hidden');
+                document.getElementById('scene-playground').classList.add('active');
+            }, 800);
+        }
+
+        // --- 3. THEME SWITCHER (Lampu) ---
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            gameState.theme = (gameState.theme === 'dark') ? 'light' : 'dark';
+            applyTheme(gameState.theme);
+            saveState();
+        });
+
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            document.getElementById('themeToggle').innerText = (theme === 'dark') ? '💡' : '🌙';
+        }
+
+        // --- 4. MODALS & EASTER EGG ---
+        function openModal(id) {
+            document.getElementById(id).classList.add('active');
+        }
+        
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+            // Pause video when closing radio modal
+            if(id === 'modal-radio') {
+                document.getElementById('radioPlayer').pause();
+            }
+        }
+
+        function foundEasterEgg() {
+            if(!gameState.easterEgg) {
+                gameState.easterEgg = true;
+                updateScore(25);
+                alert("Easter Egg ditemukan! Bonus +25 Pts.");
+            } else {
+                alert("Kamu sudah menemukan rahasia ini.");
+            }
+        }
+
+        // --- 5. PUZZLE: COMPUTER ---
+        let compTries = 0;
+        function checkComputer() {
+            if(gameState.compDone) {
+                document.getElementById('fbComp').innerHTML = "<span class='success-text'>Sistem sudah diakses. Clue: Huruf 'I'</span>";
+                return;
+            }
+            
+            const inp = document.getElementById('inpComp').value.trim();
+            const fb = document.getElementById('fbComp');
+            
+            // Jawaban: 3 (segitiga), 4 (persegi), 5 (jari), 7 (Ronaldo) = 3457
+            if(inp === '3457') {
+                fb.innerHTML = "<span class='success-text'>ACCESS GRANTED. You have discovered the first signal.<br>Clue untuk Final: <strong>I</strong></span>";
+                gameState.compDone = true;
+                updateScore(100);
+                checkFinalUnlock();
+            } else {
+                compTries++;
+                fb.innerHTML = `<span class='error-text'>ACCESS DENIED. Percobaan gagal (${compTries}/3)</span>`;
+                if(compTries >= 3) {
+                    fb.innerHTML += "<br>Hint: Pastikan menjumlahkan sudut, sisi, dan jari dengan benar.";
+                }
+            }
+        }
+
+        // --- 6. PUZZLE: RADIO ---
+        function getRadioHint() {
+            gameState.radioHints++;
+            updateScore(-10);
+            const out = document.getElementById('radioHintOut');
+            if(gameState.radioHints === 1) out.innerText = "Clue 1: Lagu ini tentang seseorang yang sedang memanggil nama.";
+            else if(gameState.radioHints === 2) out.innerText = "Clue 2: Penyanyinya adalah pria dengan nama panggung 3 kata (The...).";
+            else out.innerText = "Clue 3: C _ _ l   O _ t   M y   N _ m e";
+        }
+
+        function checkRadio() {
+            if(gameState.radioDone) {
+                document.getElementById('fbRadio').innerHTML = "<span class='success-text'>Sinyal sudah teridentifikasi. Lanjutkan pencarian.</span>";
+                return;
+            }
+
+            let inp = document.getElementById('inpRadio').value.toLowerCase().replace(/[^a-z]/g, '');
+            const fb = document.getElementById('fbRadio');
+
+            // "Call Out My Name"
+            if(inp === 'calloutmyname') {
+                fb.innerHTML = "<span class='success-text'>SIGNAL IDENTIFIED! Jawaban Benar.</span>";
+                gameState.radioDone = true;
+                
+                // Poin berdasarkan hint
+                let pts = 100;
+                if(gameState.radioHints == 1) pts = 75;
+                if(gameState.radioHints >= 2) pts = 50;
+                updateScore(pts);
+                
+                checkFinalUnlock();
+            } else {
+                fb.innerHTML = "<span class='error-text'>Sinyal tidak cocok. Coba dengarkan lebih teliti.</span>";
+            }
+        }
+
+        // --- 7. PUZZLE: MYSTERY BOX ---
+        let collectedPetals = 0;
+        function collectPetal(el) {
+            if(gameState.boxDone) return;
+            el.classList.add('found');
+            collectedPetals++;
+            document.getElementById('petalCount').innerText = collectedPetals;
+
+            if(collectedPetals === 3) {
+                gameState.boxDone = true;
+                document.getElementById('boxIcon').innerText = '🌸';
+                document.getElementById('boxIcon').classList.add('open');
+                document.getElementById('fbBox').innerHTML = "You found something beautiful hidden inside the mystery.<br>Clue untuk Final: <strong>N</strong>";
+                updateScore(100);
+                triggerParticles(50); // Small bloom
+                checkFinalUnlock();
+            }
+        }
+
+        // --- 8. FINAL CHALLENGE ---
+        function checkFinalUnlock() {
+            if(gameState.compDone && gameState.radioDone && gameState.boxDone) {
+                const door = document.getElementById('doorFinal');
+                door.classList.remove('locked');
+                door.classList.add('unlocked');
+            }
+        }
+
+        function checkFinal() {
+            // Clue dari Dark(S), Light(G), Comp(I), Box(N) => SIGN
+            const inp = document.getElementById('inpFinal').value.toUpperCase().trim();
+            const fb = document.getElementById('fbFinal');
+
+            if(inp === 'SIGN') {
+                fb.innerHTML = "<span class='success-text'>SIGNAL RESTORED. Membuka gerbang...</span>";
+                gameState.finalDone = true;
+                updateScore(200); // Bonus
+                saveState();
+                
+                setTimeout(() => {
+                    closeModal('modal-final');
+                    triggerSecretEnding();
+                }, 1000);
+            } else {
+                fb.innerHTML = "<span class='error-text'>KODE SALAH. Pastikan menggabungkan semua Clue yang didapat.</span>";
+            }
+        }
+
+        // --- 9. SECRET ENDING ---
+        function triggerSecretEnding() {
+            // Hide Playground
+            document.getElementById('scene-playground').classList.remove('active');
+            document.getElementById('scene-playground').classList.add('hidden');
+            
+            // Show Ending Scene
+            const ending = document.getElementById('scene-ending');
+            ending.classList.remove('hidden');
+            ending.classList.add('active');
+
+            // Set final stats
+            document.getElementById('finalScoreDisplay').innerText = gameState.score;
+            document.getElementById('finalRankDisplay').innerText = document.getElementById('uiRank').innerText;
+
+            // Wait for cartoon walk animation (4s), then show final text & particles
+            setTimeout(() => {
+                document.getElementById('animCartoon').classList.add('hidden');
+                document.getElementById('finalText').classList.add('show');
+                triggerParticles(150, true); // Massive Bloom explosion
+            }, 4000);
+        }
+
+        // --- 10. PARTICLE SYSTEM (Canvas) ---
+        const canvas = document.getElementById('particleCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        let animId;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function triggerParticles(count = 50, massive = false) {
+            for(let i = 0; i < count; i++) {
+                particles.push({
+                    x: canvas.width / 2,
+                    y: massive ? (canvas.height / 2 + 100) : (canvas.height / 2),
+                    vx: (Math.random() - 0.5) * (massive ? 25 : 15),
+                    vy: (Math.random() - 0.5) * (massive ? 25 : 15) - 5,
+                    size: Math.random() * 8 + 4,
+                    color: Math.random() > 0.5 ? '#ffb7c5' : '#d6336c',
+                    life: Math.random() * 0.5 + 0.5
+                });
+            }
+            if(!animId) animateParticles();
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let active = false;
+            
+            for(let i = 0; i < particles.length; i++) {
+                let p = particles[i];
+                if(p.life > 0) {
+                    active = true;
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.3; // Gravity
+                    p.life -= 0.01;
+                    
+                    ctx.globalAlpha = Math.max(0, p.life);
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            
+            if(active) {
+                animId = requestAnimationFrame(animateParticles);
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                cancelAnimationFrame(animId);
+                animId = null;
+                particles = [];
+            }
+        }
+
+        // INIT
+        window.onload = loadState;
+    </script>
+</body>
+</html>
